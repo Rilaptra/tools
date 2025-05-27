@@ -55,28 +55,55 @@ function addFontAwesomeLink() {
   console.log('FontAwesome link added.');
 }
 
-// Function to add Google Generative AI SDK
+// Function to add Google Generative AI SDK (ES Module version with dynamic import)
 function addGoogleGenAiSdk() {
-    const sdkSrc = 'https://sdk.vercel.ai/google-generative-ai.js';
-    const existingScripts = document.head.getElementsByTagName('script');
-    for (let i = 0; i < existingScripts.length; i++) {
-        if (existingScripts[i].src === sdkSrc) {
-            console.log('Google Generative AI SDK script already exists.');
-            return;
+    const sdkSrc = 'https://cdn.jsdelivr.net/npm/@google/genai@1.1.0/dist/web/index.mjs';
+    
+    // Check if already loaded or if window.GoogleGenerativeAI is already set by a previous load attempt
+    if (document.querySelector(`script[src="${sdkSrc}"]`) || window.GoogleGenerativeAI) {
+        if (window.GoogleGenerativeAI) {
+            console.log('Google Generative AI SDK already available on window object.');
+        } else {
+            console.log('Google Generative AI SDK (ESM) script tag already exists.');
         }
+        // If script tag exists but window.GoogleGenerativeAI is not set, onload might re-trigger if needed,
+        // but ideally, this function is called only once or handles re-calls gracefully.
+        return;
     }
 
     const sdkScript = document.createElement('script');
     sdkScript.src = sdkSrc;
-    sdkScript.async = true;
-    // Add error handling for SDK loading
+    sdkScript.type = 'module'; 
+    
+    sdkScript.onload = async () => {
+        console.log('Google Generative AI SDK (ESM) script file loaded.');
+        try {
+            // Dynamically import the module using its source URL
+            const genaiModule = await import(sdkSrc);
+            if (genaiModule && genaiModule.GoogleGenerativeAI) {
+                window.GoogleGenerativeAI = genaiModule.GoogleGenerativeAI;
+                console.log('Successfully imported and assigned GoogleGenerativeAI to window object.');
+            } else if (genaiModule && genaiModule.default && genaiModule.default.GoogleGenerativeAI) {
+                // Fallback for modules that might export it under a default object
+                window.GoogleGenerativeAI = genaiModule.default.GoogleGenerativeAI;
+                console.log('Successfully imported (via default) and assigned GoogleGenerativeAI to window object.');
+            } 
+            else {
+                console.error('GoogleGenerativeAI class not found in the imported module.', genaiModule);
+                displayMessage("Failed to initialize Gemini SDK: Class not found in module.", "error");
+            }
+        } catch (error) {
+            console.error('Error dynamically importing Google Generative AI SDK:', error);
+            displayMessage("Error initializing Gemini SDK. Check console for details.", "error");
+        }
+    };
+    
     sdkScript.onerror = () => {
-        console.error('Failed to load the Google Generative AI SDK. Please check your internet connection or ad blockers.');
-        // Optionally, display this error to the user in the UI
-        displayMessage("Failed to load the Gemini SDK. Chat functionality may be unavailable.", "error");
+        console.error('Failed to load the Google Generative AI SDK (ESM) script file. Check network or script URL.');
+        displayMessage("Failed to load the Gemini SDK (ESM). Chat functionality may be unavailable.", "error");
     };
     document.head.appendChild(sdkScript);
-    console.log('Google Generative AI SDK script added.');
+    console.log('Google Generative AI SDK (ESM) script added to head for dynamic import.');
 }
 
 // --- Initial Calls ---
@@ -129,7 +156,7 @@ function newButton(name, parent, onClickFunction, customClasses = '') {
 // --- Gemini Chat Helper Functions ---
 
 const GEMINI_API_KEY_STORAGE_KEY = 'geminiApiKey';
-let currentChatHistory = []; // Initialize chat history
+let currentChatHistory = []; 
 
 function saveApiKey(apiKeyStatusElement) {
     const apiKeyInput = document.getElementById('geminiApiKeyInput');
@@ -147,7 +174,7 @@ function saveApiKey(apiKeyStatusElement) {
             apiKeyStatusElement.className = 'text-xs font-mono text-green-600 mt-1';
         }
         done('API Key saved successfully!');
-        currentChatHistory = []; // Reset history on new API key
+        currentChatHistory = []; 
         const chatDisplay = document.getElementById('geminiChatDisplay');
         if (chatDisplay) {
             chatDisplay.innerHTML = '<div class="text-gray-500 text-sm font-mono text-center p-4">Chat history cleared due to new API key.</div>';
@@ -191,7 +218,7 @@ function displayMessage(message, role) {
     messageWrapper.className = 'flex w-full mb-2';
 
     const messageEl = document.createElement('div');
-    const textNode = document.createTextNode(message); // Basic XSS mitigation
+    const textNode = document.createTextNode(message); 
     messageEl.appendChild(textNode);
     messageEl.className = 'p-2 rounded-lg max-w-xs md:max-w-md lg:max-w-lg font-mono text-sm break-words shadow';
 
@@ -201,7 +228,7 @@ function displayMessage(message, role) {
             messageWrapper.classList.add('justify-end');
             break;
         case 'assistant':
-        case 'model': // SDK uses 'model' for assistant role
+        case 'model': 
             messageEl.className += ' bg-gray-200 text-gray-800';
             messageWrapper.classList.add('justify-start');
             break;
@@ -221,8 +248,8 @@ function displayMessage(message, role) {
 
 async function callGeminiAPI(prompt, modelName) { 
     if (typeof window.GoogleGenerativeAI === 'undefined') {
-        console.error('GoogleGenerativeAI SDK not loaded yet.');
-        return { success: false, error: "Gemini SDK not loaded. Please try again in a moment or check browser console."};
+        console.error('GoogleGenerativeAI SDK not found on window object. Dynamic import might have failed or not completed.');
+        return { success: false, error: "Gemini SDK not available. Please wait a moment or try refreshing."};
     }
 
     const apiKey = loadApiKey();
@@ -231,13 +258,12 @@ async function callGeminiAPI(prompt, modelName) {
     }
 
     try {
-        const genAI = new window.GoogleGenerativeAI(apiKey);
+        const genAI = new window.GoogleGenerativeAI(apiKey); 
         const model = genAI.getGenerativeModel({ model: modelName });
-
-        // Ensure history parts are correctly formatted
+        
         const formattedHistory = currentChatHistory.map(entry => ({
             role: entry.role,
-            parts: [{ text: entry.parts[0].text }] // Assuming parts is always an array with one text object
+            parts: [{ text: entry.parts[0].text }] 
         }));
         
         const chat = model.startChat({ history: formattedHistory });
@@ -245,7 +271,6 @@ async function callGeminiAPI(prompt, modelName) {
         const response = result.response;
         const responseText = response.text();
 
-        // Update history with the new interaction
         currentChatHistory.push({ role: "user", parts: [{ text: prompt }] });
         currentChatHistory.push({ role: "model", parts: [{ text: responseText }] });
         
@@ -255,13 +280,14 @@ async function callGeminiAPI(prompt, modelName) {
     } catch (error) {
         console.error("Error calling Gemini API:", error);
         let errorMessage = error.message || "An unknown error occurred.";
-        // Check for specific error types if possible, e.g., API key invalid, quota exceeded
         if (error.toString().includes("API key not valid")) {
             errorMessage = "API Key not valid. Please check your API key.";
         } else if (error.toString().includes("quota")) {
             errorMessage = "API quota exceeded. Please check your Google Cloud console.";
+        } else if (error.name === 'TypeError' && error.message.includes("window.GoogleGenerativeAI is not a constructor")) {
+            // This error might still occur if the dynamic import fails silently or the assignment is incorrect.
+            errorMessage = "Gemini SDK constructor failed. Ensure SDK loaded correctly.";
         }
-        // Do not add failed attempts to history
         return { success: false, error: errorMessage };
     }
 }
@@ -326,7 +352,7 @@ function addGeminiChatUI() {
     apiKeyStatus.className = 'text-xs font-mono text-gray-600 mt-1';
     apiKeySection.appendChild(apiKeyStatus);
     
-    saveApiKeyButton.onclick = () => saveApiKey(apiKeyStatus); // saveApiKey now also clears history
+    saveApiKeyButton.onclick = () => saveApiKey(apiKeyStatus); 
     panel.appendChild(apiKeySection);
 
     const modelSelectLabel = document.createElement('label');
@@ -336,12 +362,10 @@ function addGeminiChatUI() {
     const modelSelect = document.createElement('select');
     modelSelect.id = 'geminiModelSelect'; 
     modelSelect.className = 'w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 mb-4 font-mono text-sm';
-    // Updated model names for SDK compatibility (common free tiers)
     const models = [
-        { name: "Gemma 7B (Free)", value: "gemma-7b" }, // Or gemma-2b if 7b causes issues
+        { name: "Gemma 7B (Free)", value: "gemma-7b" }, 
         { name: "Gemini 1.5 Flash (Latest)", value: "gemini-1.5-flash-latest" },
         { name: "Gemini 1.0 Pro (Legacy)", value: "gemini-1.0-pro" } 
-        // { name: "Gemini Pro (Current)", value: "gemini-pro" } // 'gemini-pro' can be ambiguous; 1.0-pro is specific
     ];
     models.forEach(model => {
         const option = document.createElement('option');
@@ -377,7 +401,7 @@ function addGeminiChatUI() {
 
     const promptInput = document.createElement('textarea');
     promptInput.id = 'geminiPromptInput';
-    promptInput.placeholder = 'Type your message to Gemini...'; // Removed min 5 chars
+    promptInput.placeholder = 'Type your message to Gemini...'; 
     promptInput.rows = 3;
     promptInput.className = 'w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 mb-4 font-mono text-sm';
     panel.appendChild(promptInput);
@@ -387,15 +411,14 @@ function addGeminiChatUI() {
         const selectedModelName = document.getElementById('geminiModelSelect').value;
 
         if (!currentPrompt) {
-            // displayMessage("Please enter a message.", "error"); // Can be annoying, let API handle empty.
-            return; // Or let the API handle empty prompt if it does so gracefully.
+            return; 
         }
         
         promptInput.value = ''; 
         displayMessage(currentPrompt, 'user');
 
         const thinkingMsgId = 'thinking-' + Date.now();
-        displayMessage('Thinking...', 'assistant'); // SDK uses 'model' for assistant role
+        displayMessage('Thinking...', 'assistant'); 
         let thinkingMsgElement = document.getElementById('geminiChatDisplay').lastChild.lastChild; 
         if (thinkingMsgElement) thinkingMsgElement.id = thinkingMsgId;
 
@@ -407,7 +430,7 @@ function addGeminiChatUI() {
         }
 
         if (response.success) {
-            displayMessage(response.text, 'model'); // SDK uses 'model'
+            displayMessage(response.text, 'model'); 
         } else {
             displayMessage(response.error || "An unknown error occurred.", 'error');
         }
@@ -608,4 +631,4 @@ function addFixedGearIcon() {
 addFixedGearIcon(); 
 // --- End Other Initial Calls ---
 
-console.log('tool.js with real Gemini API calls and history initialized.');
+console.log('tool.js with ES Module SDK dynamic import initialized.');
