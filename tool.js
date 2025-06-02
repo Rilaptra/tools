@@ -1162,27 +1162,6 @@ function initializeErzyPageMenu() {
   const menuElement = ensurePageMenu();
   const gearIconElement = addFixedGearIcon();
 
-  // Contoh penambahan tombol ke tools container
-  const toolsContainer = menuElement.querySelector("#erzyToolsContainer");
-  if (toolsContainer) {
-    new ToolsButton(
-      "JS Evaluator (Menu)",
-      () => {
-        try {
-          const input = prompt("Enter JS code to evaluate:");
-          if (input === null) return;
-          const result = eval(input);
-          // Ganti alert dengan notifikasi custom yang lebih baik jika ada
-          alert(`Result:\n${result}`);
-        } catch (error) {
-          alert(`Error:\n${error}`);
-          console.error("JS Eval Error (Menu):", error);
-        }
-      },
-      toolsContainer
-    );
-  }
-
   window.erzyPageMenuInitialized = true;
   console.log("Erzy Tools: Page Menu initialized.");
   return { menuElement, gearIconElement, toolsContainer };
