@@ -399,7 +399,8 @@ class ChatBot {
       passive: false,
     });
     document.addEventListener("touchend", this._stopDragHandler);
-    if (e.type === "touchmove" || e.type === "touchstart") e.preventDefault();
+    // Disable
+    // if (e.type === "touchmove" || e.type === "touchstart") e.preventDefault();
   }
 
   _onDrag(e) {
