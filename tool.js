@@ -759,16 +759,16 @@ function createChatbotUI() {
             <i class="fas fa-robot mr-2 text-blue-500"></i>Gemini AI ✨
         </h2>
         <div class="space-x-2">
-             <button id="erzyChatbotSettingsButton" title="Pengaturan Gemini" class="text-gray-600 hover:text-blue-500 focus:outline-none">
+             <button id="erzyChatbotSettingsButton" title="Pengaturan Gemini" class="p-2 text-gray-600 hover:text-blue-500 focus:outline-none">
                 <i class="fas fa-cog"></i>
             </button>
-            <button id="erzyChatbotResetButton" title="Reset Chat" class="text-gray-600 hover:text-yellow-500 focus:outline-none">
+            <button id="erzyChatbotResetButton" title="Reset Chat" class="p-2 text-gray-600 hover:text-yellow-500 focus:outline-none">
                 <i class="fas fa-sync-alt"></i>
             </button>
-            <button id="erzyChatbotMinimizeButton" title="Minimize" class="text-gray-600 hover:text-gray-800 focus:outline-none">
+            <button id="erzyChatbotMinimizeButton" title="Minimize" class="p-2 text-gray-600 hover:text-gray-800 focus:outline-none">
                 <i class="fas fa-window-minimize"></i>
             </button>
-            <button id="erzyChatbotCloseButton" title="Tutup" class="text-gray-600 hover:text-red-500 focus:outline-none">
+            <button id="erzyChatbotCloseButton" title="Tutup" class="p-2 text-gray-600 hover:text-red-500 focus:outline-none">
                 <i class="fas fa-times"></i>
             </button>
         </div>
