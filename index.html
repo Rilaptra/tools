@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Main Tools.js</title>
+    <script type="module" src="tool.js"></script>
+
+    <!-- Addition Style -->
+    <style>
+      .tools-button:hover {
+        transform: scale(1.05);
+      }
+      .tools-button:active {
+        transform: scale(0.95);
+      }
+      input,
+      select {
+        background-color: transparent;
+        border: 1px solid #ccc;
+      }
+    </style>
+  </head>
+  <body class="bg-gray-400">
+    <div id="erzyErrorNotification" class="flex justify-center">
+      <div
+        class="absolute top-2 opacity-0 bg-red-500 text-white font-bold font-mono py-2 px-4 rounded shadow-md z-[100001]"
+      >
+        Error: <span id="erzyErrorMessage"></span>
+        <!-- Copy error message button -->
+        <button
+          class="absolute top-2 right-2 text-white hover:text-gray-300"
+          onclick="navigator.clipboard.writeText(document.getElementById('erzyErrorMessage').textContent).then(() => alert('Copied to clipboard!'))"
+        >
+          <i class="fas fa-copy"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Button to open github repo -->
+    <a
+      href="https://github.com/Erzysh/Tools.js"
+      target="_blank"
+      rel="noopener noreferrer"
+      class="fixed top-2 left-2 bg-gray-800 text-white font-bold font-mono py-2 px-4 rounded shadow-md z-[100001] hover:bg-gray-600"
+    >
+      <i class="fab fa-github"></i>
+    </a>
+
+    <!-- Device Ratio -->
+    <span
+      id="device"
+      class="fixed top-2 right-2 bg-gray-800 text-sm text-white font-bold font-mono py-2 px-4 rounded shadow-md z-[100001]"
+    ></span>
+
+    <!-- Console alternative -->
+    <div class="flex justify-center items-center h-screen">
+      <div class="bg-white p-4 rounded shadow-md">
+        <div
+          style="font-family: 'Courier New', Courier, monospace"
+          class="max-w-[70%]"
+        >
+          <button
+            onclick="document.getElementById('erzyConsoleOutput').innerHTML = 'Console output will appear here <br />'"
+            class="bg-blue-500 flex justify-self-end mb-5 relative hover:bg-blue-700 text-white font-bold py-2 px-3 rounded"
+          >
+            <i class="fas fa-trash"></i>
+          </button>
+          <p class="text-sm text-gray-600" id="erzyConsoleOutput">
+            Console output will appear here
+            <br />
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Script for HTML (Error handler and notification) -->
+    <script>
+      const device = document.getElementById("device");
+      const errorNotif = document.getElementById("erzyErrorNotification");
+      const errorMessage = document.getElementById("erzyErrorMessage");
+
+      window.addEventListener("load", () => {
+        device.textContent = `${window.innerWidth}px x ${window.innerHeight}px`;
+      });
+      window.addEventListener("resize", () => {
+        device.textContent = `${window.innerWidth}px x ${window.innerHeight}px`;
+      });
+
+      window.addEventListener("error", (event) => {
+        console.error(
+          "Error:",
+          event.error,
+          event.filename,
+          event.lineno,
+          event.colno,
+          event.error.stack
+        );
+        errorMessage.textContent = event.error.message;
+        errorNotif.classList.remove("opacity-0", "top-0");
+        errorNotif.classList.add("opacity-100", "top-5");
+      });
+
+      // detect whatever output in browser console and put it in erzyConsoleOutput
+      const originalConsoleLog = console.log;
+      // Helper to escape HTML characters for display within a text-based element like <p>
+      function escapeHtml(unsafe) {
+        return unsafe
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#039;");
+      }
+
+      console.log = function () {
+        const erzyConsoleOutput = document.getElementById("erzyConsoleOutput");
+
+        let output = Array.from(arguments)
+          .map((arg) => {
+            if (arg instanceof HTMLElement) {
+              // Handle HTMLElements by escaping their outerHTML.
+              // This displays the element's HTML structure as text,
+              // preventing it from being rendered as live HTML and potentially
+              // breaking the structure of the erzyConsoleOutput <p> tag.
+              return escapeHtml(arg.outerHTML);
+            }
+            try {
+              return JSON.stringify(arg, null, 2); // Try to stringify as JSON
+            } catch (e) {
+              return String(arg); // If not JSON, use the original message
+            }
+          })
+          .join(" "); // Join arguments with a space
+
+        erzyConsoleOutput.innerHTML += "<br/>" + output + "<br/>";
+        originalConsoleLog.apply(console, arguments);
+      };
+    </script>
+  </body>
+</html>

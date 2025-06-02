@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Contoh Jendela Chatbot</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
+    />
+    <style>
+      /* Custom scrollbar */
+      .erzy-chatbot-messages::-webkit-scrollbar {
+        width: 8px;
+      }
+      .erzy-chatbot-messages::-webkit-scrollbar-track {
+        background: #f1f1f1;
+      }
+      .erzy-chatbot-messages::-webkit-scrollbar-thumb {
+        background: #888;
+        border-radius: 4px;
+      }
+      .erzy-chatbot-messages::-webkit-scrollbar-thumb:hover {
+        background: #555;
+      }
+      .dark .erzy-chatbot-messages::-webkit-scrollbar-track {
+        background: #4b5563;
+      }
+      .dark .erzy-chatbot-messages::-webkit-scrollbar-thumb {
+        background: #6b7280;
+      }
+      .dark .erzy-chatbot-messages::-webkit-scrollbar-thumb:hover {
+        background: #9ca3af;
+      }
+      .erzy-dragging,
+      .erzy-dragging * {
+        user-select: none !important;
+        -webkit-user-select: none !important;
+        -moz-user-select: none !important;
+        -ms-user-select: none !important;
+      }
+    </style>
+  </head>
+  <body
+    class="bg-gray-200 dark:bg-gray-900 p-10 flex justify-center items-center min-h-screen"
+  >
+    <div
+      id="erzyChatbotWindow"
+      class="fixed w-full max-w-md h-[600px] max-h-[80vh] bg-white dark:bg-gray-800 rounded-xl shadow-2xl flex flex-col overflow-hidden border border-gray-300 dark:border-gray-700 z-[99990]"
+    >
+      <div
+        id="erzyChatbotHeader"
+        class="bg-gray-100 dark:bg-gray-700 p-3 flex justify-between items-center border-b border-gray-200 dark:border-gray-600 cursor-move"
+      >
+        <h2 class="font-semibold text-lg text-gray-800 dark:text-gray-100">
+          <i class="fas fa-robot mr-2 text-blue-500"></i>Gemini AI ✨
+        </h2>
+        <div class="space-x-2">
+          <button
+            id="erzyChatbotSettingsButton"
+            title="Pengaturan Gemini"
+            class="text-gray-600 dark:text-gray-300 hover:text-blue-500 dark:hover:text-blue-400 focus:outline-none"
+          >
+            <i class="fas fa-cog"></i>
+          </button>
+          <button
+            id="erzyChatbotResetButton"
+            title="Reset Chat"
+            class="text-gray-600 dark:text-gray-300 hover:text-yellow-500 dark:hover:text-yellow-400 focus:outline-none"
+          >
+            <i class="fas fa-sync-alt"></i>
+          </button>
+          <button
+            id="erzyChatbotMinimizeButton"
+            title="Minimize"
+            class="text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 focus:outline-none"
+          >
+            <i class="fas fa-window-minimize"></i>
+          </button>
+          <button
+            id="erzyChatbotCloseButton"
+            title="Tutup"
+            class="text-gray-600 dark:text-gray-300 hover:text-red-500 dark:hover:text-red-400 focus:outline-none"
+          >
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+      </div>
+
+      <div
+        id="erzyChatbotMessages"
+        class="flex-grow p-4 space-y-4 overflow-y-auto erzy-chatbot-messages bg-white dark:bg-gray-800"
+      ></div>
+
+      <div
+        id="erzyChatbotLoadingIndicator"
+        class="hidden flex justify-start group p-4"
+      >
+        <div
+          class="bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 p-3 rounded-lg max-w-[80%] shadow"
+        >
+          <div class="flex items-center space-x-2">
+            <div
+              class="w-2 h-2 bg-gray-500 rounded-full animate-pulse delay-75"
+            ></div>
+            <div
+              class="w-2 h-2 bg-gray-500 rounded-full animate-pulse delay-150"
+            ></div>
+            <div
+              class="w-2 h-2 bg-gray-500 rounded-full animate-pulse delay-300"
+            ></div>
+            <span class="text-sm italic">Bot sedang mengetik...</span>
+          </div>
+        </div>
+      </div>
+
+      <div
+        id="erzyChatbotInputArea"
+        class="bg-gray-100 dark:bg-gray-700 p-3 border-t border-gray-200 dark:border-gray-600"
+      >
+        <form id="erzyChatbotForm" class="flex items-center space-x-2">
+          <input
+            type="text"
+            id="erzyChatbotInput"
+            placeholder="Ketik pesanmu di sini..."
+            class="flex-grow p-3 border border-gray-300 dark:border-gray-500 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 text-sm focus:outline-none"
+            autocomplete="off"
+          />
+          <button
+            type="submit"
+            id="erzyChatbotSendButton"
+            title="Kirim Pesan ✨"
+            class="bg-blue-500 hover:bg-blue-600 text-white p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-700 transition-colors duration-150"
+          >
+            <i class="fas fa-paper-plane"></i>
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <script>
+      const chatbotWindow = document.getElementById("erzyChatbotWindow");
+      const chatbotHeader = document.getElementById("erzyChatbotHeader");
+      const messagesContainer = document.getElementById("erzyChatbotMessages");
+      const chatForm = document.getElementById("erzyChatbotForm");
+      const chatInput = document.getElementById("erzyChatbotInput");
+      const sendButton = document.getElementById("erzyChatbotSendButton");
+      const loadingIndicator = document.getElementById(
+        "erzyChatbotLoadingIndicator"
+      );
+      const resetButton = document.getElementById("erzyChatbotResetButton");
+      const settingsButton = document.getElementById(
+        "erzyChatbotSettingsButton"
+      );
+
+      const CHAT_HISTORY_KEY = "erzyChatHistory";
+      const GEMINI_API_KEY_STORAGE_KEY = "geminiApiKey";
+      const GEMINI_MODEL_STORAGE_KEY = "modelSelect";
+      const DEFAULT_GEMINI_MODEL = "gemini-2.0-flash";
+      const PROVIDED_API_KEY = "AIzaSyC-T25F1a4-YwYVRkwzTCO1GHx5o09ZPss";
+
+      let chatHistory = [];
+
+      // --- Inisialisasi API Key ---
+      function initializeApiKey() {
+        if (!localStorage.getItem(GEMINI_API_KEY_STORAGE_KEY)) {
+          localStorage.setItem(GEMINI_API_KEY_STORAGE_KEY, PROVIDED_API_KEY);
+          console.log(
+            "Erzy Tools: Default API Key (provided) set in localStorage."
+          );
+          addMessageToHistoryAndRender(
+            "Info: API Key default telah diatur. Anda bisa mengubahnya di Pengaturan Gemini.",
+            false
+          );
+        }
+      }
+
+      // --- Fungsi untuk Render Pesan ---
+      function renderMessage(messageText, isUser, timestamp) {
+        const messageDiv = document.createElement("div");
+        messageDiv.className = `flex ${
+          isUser ? "justify-end" : "justify-start"
+        } group`;
+
+        let processedMessage = messageText
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
+        processedMessage = processedMessage.replace(
+          /\*\*(.*?)\*\*/g,
+          "<strong>$1</strong>"
+        );
+        processedMessage = processedMessage.replace(
+          /\*(.*?)\*/g,
+          "<em>$1</em>"
+        );
+        processedMessage = processedMessage.replace(
+          /```(\w*)\n([\s\S]*?)```/g,
+          `<pre class="bg-gray-800 dark:bg-gray-700 p-3 rounded-lg overflow-x-auto my-2 text-sm">
+             <code class="language-$1 text-gray-800 dark:text-gray-100">$2</code>
+           </pre>`
+        );
+        processedMessage = processedMessage.replace(/\n/g, "<br>");
+
+        messageDiv.innerHTML = `
+                <div class="${
+                  isUser
+                    ? "bg-blue-500 text-white"
+                    : "bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200"
+                } p-3 rounded-lg max-w-[80%] shadow">
+                    <div class="text-sm">${processedMessage}</div>
+                    <p class="text-xs ${
+                      isUser
+                        ? "text-blue-200"
+                        : "text-gray-500 dark:text-gray-400"
+                    } mt-1 text-right">${isUser ? "Anda" : "Bot"} - ${
+          timestamp ||
+          new Date().toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          })
+        }</p>
+                </div>
+            `;
+        messagesContainer.appendChild(messageDiv);
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      }
+
+      // --- Fungsi untuk Simpan dan Render Pesan ---
+      function addMessageToHistoryAndRender(
+        text,
+        isUser,
+        timestampOverride = null
+      ) {
+        const timestamp =
+          timestampOverride ||
+          new Date().toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+        const messageData = { text, isUser, timestamp };
+
+        if (!(text.startsWith("Error:") || text.startsWith("Info:"))) {
+          chatHistory.push(messageData);
+          localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(chatHistory));
+        }
+        renderMessage(text, isUser, timestamp);
+      }
+
+      // --- Fungsi untuk Muat Histori Chat ---
+      function loadChatHistory() {
+        const savedHistory = localStorage.getItem(CHAT_HISTORY_KEY);
+        if (savedHistory) {
+          chatHistory = JSON.parse(savedHistory);
+          messagesContainer.innerHTML = "";
+          chatHistory.forEach((msg) =>
+            renderMessage(msg.text, msg.isUser, msg.timestamp)
+          );
+        } else {
+          addMessageToHistoryAndRender(
+            "Halo! Saya Gemini AI ✨. Ada yang bisa saya bantu hari ini?",
+            false,
+            new Date().toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            })
+          );
+        }
+      }
+
+      // --- Fungsi untuk Reset Chat ---
+      function resetChat() {
+        if (
+          confirm(
+            "Apakah Anda yakin ingin mereset percakapan ini? Histori akan dihapus permanen."
+          )
+        ) {
+          messagesContainer.innerHTML = "";
+          chatHistory = [];
+          localStorage.removeItem(CHAT_HISTORY_KEY);
+          addMessageToHistoryAndRender(
+            "Percakapan direset. Ada yang bisa saya bantu?",
+            false,
+            new Date().toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            })
+          );
+          console.log("Chat history reset.");
+        }
+      }
+
+      // --- Fungsi untuk Generate System Prompt dari Halaman ---
+      function getCurrentPageContext() {
+        let currentPageContext = "";
+        try {
+          currentPageContext = document.body.innerText || "";
+          currentPageContext = currentPageContext.replace(/\s+/g, " ").trim(); // Hapus spasi berlebih
+        } catch (error) {
+          console.error("Erzy Tools: Gagal mengambil konteks halaman:", error);
+          currentPageContext = ""; // Atau "Konteks halaman tidak tersedia"
+          // showNotification("Gagal mengambil konteks halaman.", 'error'); // Jika ada fungsi notifikasi
+          addMessageToHistoryAndRender(
+            "Info: Gagal mengambil konteks halaman untuk prompt.",
+            false
+          );
+        }
+        return currentPageContext;
+      }
+
+      // --- Fungsi untuk Membangun Prompt Final ---
+      function buildPrompt(context, question, selectedText = null) {
+        // selectedText belum dipakai di sini
+        let prompt = `Berdasarkan informasi berikut, jawab pertanyaan pengguna:\n\n`;
+        const maxContextLength = 5000; // Batas panjang konteks
+        if (context) {
+          prompt += `--- Konteks Halaman Web ---\n${context.substring(
+            0,
+            maxContextLength
+          )}${context.length > maxContextLength ? "..." : ""}\n\n`;
+        }
+        prompt += `--- Pertanyaan Pengguna ---\n${question}`;
+        return prompt;
+      }
+
+      // --- Fungsi untuk mendapatkan respons dari Gemini API ---
+      async function getGeminiResponse() {
+        const apiKey = localStorage.getItem(GEMINI_API_KEY_STORAGE_KEY);
+        const selectedModel =
+          localStorage.getItem(GEMINI_MODEL_STORAGE_KEY) ||
+          DEFAULT_GEMINI_MODEL;
+
+        if (!apiKey) {
+          addMessageToHistoryAndRender(
+            "Info: API Key Gemini belum diatur. Silakan atur di Pengaturan Gemini.",
+            false
+          );
+          return null;
+        }
+
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${apiKey}`;
+
+        const pageContext = getCurrentPageContext();
+
+        const currentUserPromptMsg = chatHistory[chatHistory.length - 1];
+        if (!currentUserPromptMsg || !currentUserPromptMsg.isUser) {
+          console.error(
+            "Erzy Tools: Pesan pengguna terakhir tidak ditemukan untuk API call."
+          );
+          return null;
+        }
+
+        // Gunakan buildPrompt untuk membuat prompt final
+        const finalUserPromptForApi = buildPrompt(
+          pageContext,
+          currentUserPromptMsg.text
+        );
+
+        // Buat histori untuk API, tanpa prompt pengguna terakhir (karena sudah digabung di finalUserPromptForApi)
+        const historyForApi = chatHistory
+          .slice(0, -1)
+          .filter(
+            (msg) =>
+              !(msg.text.startsWith("Error:") || msg.text.startsWith("Info:"))
+          )
+          .map((msg) => ({
+            role: msg.isUser ? "user" : "model",
+            parts: [{ text: msg.text }],
+          }));
+
+        // Tambahkan prompt pengguna yang sudah diformat sebagai pesan terakhir
+        historyForApi.push({
+          role: "user",
+          parts: [{ text: finalUserPromptForApi }],
+        });
+
+        const payload = { contents: historyForApi };
+
+        try {
+          const response = await fetch(apiUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            console.error("Gemini API Error:", errorData);
+            throw new Error(
+              `API Error (${response.status}): ${
+                errorData.error?.message || "Unknown error"
+              }`
+            );
+          }
+
+          const result = await response.json();
+
+          if (
+            result.candidates &&
+            result.candidates.length > 0 &&
+            result.candidates[0].content &&
+            result.candidates[0].content.parts &&
+            result.candidates[0].content.parts.length > 0
+          ) {
+            return result.candidates[0].content.parts[0].text;
+          } else {
+            console.error("Unexpected API response structure:", result);
+            throw new Error(
+              "Format respons API tidak valid atau tidak ada konten."
+            );
+          }
+        } catch (error) {
+          console.error("Error calling Gemini API:", error);
+          addMessageToHistoryAndRender(
+            `Error: Tidak dapat menghubungi Gemini API. ${error.message}`,
+            false
+          );
+          return null;
+        }
+      }
+
+      // --- Event Listener Form Submit ---
+      if (chatForm && chatInput && messagesContainer) {
+        chatForm.addEventListener("submit", async function (event) {
+          event.preventDefault();
+          const messageText = chatInput.value.trim();
+          if (messageText) {
+            addMessageToHistoryAndRender(messageText, true);
+            chatInput.value = "";
+            chatInput.disabled = true;
+            sendButton.disabled = true;
+            showLoading(true);
+
+            const botResponse = await getGeminiResponse();
+
+            showLoading(false);
+            chatInput.disabled = false;
+            sendButton.disabled = false;
+            chatInput.focus();
+
+            if (botResponse) {
+              addMessageToHistoryAndRender(botResponse, false);
+            }
+          }
+        });
+      }
+
+      // --- Fungsi untuk Posisi Awal Window ---
+      function setInitialPosition() {
+        const savedPosition = localStorage.getItem("erzyChatbotWindowPosition");
+        if (savedPosition) {
+          try {
+            const { x, y } = JSON.parse(savedPosition);
+            if (typeof x === "number" && typeof y === "number") {
+              chatbotWindow.style.left = `${x}px`;
+              chatbotWindow.style.top = `${y}px`;
+              chatbotWindow.classList.remove("bottom-5", "right-5");
+            } else {
+              setDefaultPosition();
+            }
+          } catch (e) {
+            console.error("Error parsing chatbot window position:", e);
+            setDefaultPosition();
+          }
+        } else {
+          setDefaultPosition();
+        }
+      }
+      function setDefaultPosition() {
+        if (!chatbotWindow.style.left && !chatbotWindow.style.top) {
+          chatbotWindow.classList.add("bottom-5", "right-5");
+        }
+      }
+
+      // --- Logika Drag and Drop ---
+      let offsetX,
+        offsetY,
+        isDragging = false;
+      function startDrag(e) {
+        isDragging = true;
+        document.body.classList.add("erzy-dragging");
+        const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+        const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+        const rect = chatbotWindow.getBoundingClientRect();
+        chatbotWindow.style.left = `${rect.left}px`;
+        chatbotWindow.style.top = `${rect.top}px`;
+        chatbotWindow.style.right = "auto";
+        chatbotWindow.style.bottom = "auto";
+        chatbotWindow.classList.remove("bottom-5", "right-5");
+        offsetX = clientX - chatbotWindow.offsetLeft;
+        offsetY = clientY - chatbotWindow.offsetTop;
+        document.addEventListener("mousemove", onDrag);
+        document.addEventListener("mouseup", stopDrag);
+        document.addEventListener("touchmove", onDrag, { passive: false });
+        document.addEventListener("touchend", stopDrag);
+        if (e.type === "touchmove") e.preventDefault();
+      }
+      function onDrag(e) {
+        if (!isDragging) return;
+        const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+        const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+        let newX = clientX - offsetX;
+        let newY = clientY - offsetY;
+        const vpWidth = window.innerWidth,
+          vpHeight = window.innerHeight;
+        const winWidth = chatbotWindow.offsetWidth,
+          winHeight = chatbotWindow.offsetHeight;
+        newX = Math.max(0, Math.min(newX, vpWidth - winWidth));
+        newY = Math.max(0, Math.min(newY, vpHeight - winHeight));
+        chatbotWindow.style.left = `${newX}px`;
+        chatbotWindow.style.top = `${newY}px`;
+        if (e.type === "touchmove") e.preventDefault();
+      }
+      function stopDrag() {
+        if (!isDragging) return;
+        isDragging = false;
+        document.body.classList.remove("erzy-dragging");
+        localStorage.setItem(
+          "erzyChatbotWindowPosition",
+          JSON.stringify({
+            x: chatbotWindow.offsetLeft,
+            y: chatbotWindow.offsetTop,
+          })
+        );
+        document.removeEventListener("mousemove", onDrag);
+        document.removeEventListener("mouseup", stopDrag);
+        document.removeEventListener("touchmove", onDrag);
+        document.removeEventListener("touchend", stopDrag);
+      }
+      if (chatbotHeader && chatbotWindow) {
+        chatbotHeader.addEventListener("mousedown", startDrag);
+        chatbotHeader.addEventListener("touchstart", startDrag, {
+          passive: false,
+        });
+      }
+
+      // --- Dark Mode Toggle (Contoh) ---
+      const htmlElement = document.documentElement;
+      if (
+        localStorage.getItem("erzyDarkMode") === "true" ||
+        (!("erzyDarkMode" in localStorage) &&
+          window.matchMedia("(prefers-color-scheme: dark)").matches)
+      ) {
+        htmlElement.classList.add("dark");
+      } else {
+        htmlElement.classList.remove("dark");
+      }
+
+      // --- Loading Indicator ---
+      function showLoading(show = true) {
+        if (loadingIndicator) {
+          if (show) {
+            loadingIndicator.classList.remove("hidden");
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+          } else {
+            loadingIndicator.classList.add("hidden");
+          }
+        }
+      }
+
+      // --- Event Listener Tombol Kontrol Window ---
+      const closeButton = document.getElementById("erzyChatbotCloseButton");
+      if (closeButton && chatbotWindow) {
+        closeButton.addEventListener("click", () => {
+          chatbotWindow.classList.add("hidden");
+          console.log("Chatbot window closed");
+        });
+      }
+
+      const minimizeButton = document.getElementById(
+        "erzyChatbotMinimizeButton"
+      );
+      const inputAreaDiv = document.getElementById("erzyChatbotInputArea");
+      if (
+        minimizeButton &&
+        chatbotWindow &&
+        messagesContainer &&
+        inputAreaDiv
+      ) {
+        let isMinimized = false;
+        let originalHeight =
+          chatbotWindow.style.height || `${chatbotWindow.offsetHeight}px`;
+
+        minimizeButton.addEventListener("click", () => {
+          isMinimized = !isMinimized;
+          if (isMinimized)
+            originalHeight =
+              chatbotWindow.style.height || `${chatbotWindow.offsetHeight}px`;
+
+          if (isMinimized) {
+            messagesContainer.classList.add("hidden");
+            inputAreaDiv.classList.add("hidden");
+            loadingIndicator.classList.add("hidden");
+            chatbotWindow.style.height = "auto";
+            minimizeButton.innerHTML = '<i class="fas fa-window-maximize"></i>';
+            minimizeButton.title = "Maximize";
+          } else {
+            messagesContainer.classList.remove("hidden");
+            inputAreaDiv.classList.remove("hidden");
+            chatbotWindow.style.height = originalHeight;
+            minimizeButton.innerHTML = '<i class="fas fa-window-minimize"></i>';
+            minimizeButton.title = "Minimize";
+          }
+          console.log(
+            `Chatbot window ${isMinimized ? "minimized" : "maximized"}`
+          );
+        });
+      }
+
+      if (resetButton) {
+        resetButton.addEventListener("click", resetChat);
+      }
+
+      if (settingsButton) {
+        settingsButton.addEventListener("click", () => {
+          const geminiModal = document.getElementById("geminiModal");
+          if (geminiModal) {
+            geminiModal.classList.toggle("hidden");
+          } else {
+            console.warn(
+              'Erzy Tools: Modal Pengaturan Gemini (id="geminiModal") tidak ditemukan.'
+            );
+            addMessageToHistoryAndRender(
+              "Info: Komponen modal Pengaturan Gemini tidak ditemukan di halaman.",
+              false
+            );
+          }
+        });
+      }
+
+      // --- Inisialisasi ---
+      initializeApiKey();
+      setInitialPosition();
+      loadChatHistory();
+    </script>
+  </body>
+</html>
