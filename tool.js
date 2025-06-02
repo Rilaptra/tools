@@ -747,7 +747,7 @@ function createChatbotUI() {
   chatbotWindow.id = "erzyChatbotWindow";
   // Default class, posisi akan diatur oleh _setInitialPosition
   chatbotWindow.className =
-    "fixed w-full max-w-md h-[600px] max-h-[80vh] bg-white rounded-xl shadow-2xl flex flex-col overflow-hidden border border-gray-300 dark:border-gray-700 z-[99999]"; // Z-index tinggi
+    "fixed w-full max-w-md h-[600px] max-h-[80vh] bg-white rounded-xl shadow-2xl flex flex-col overflow-hidden border border-gray-300 dark:border-gray-700 z-[99999] hidden"; // Z-index tinggi
 
   // Header
   const chatbotHeader = document.createElement("div");
