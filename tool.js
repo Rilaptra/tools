@@ -405,6 +405,12 @@ class ChatBot {
 
   _onDrag(e) {
     if (!this.isDragging) return;
+
+    // TAMBAHKAN ini: Panggil preventDefault HANYA saat touchmove
+    if (e.type === "touchmove") {
+      e.preventDefault();
+    }
+
     const clientX = e.clientX || (e.touches && e.touches[0].clientX);
     const clientY = e.clientY || (e.touches && e.touches[0].clientY);
     let newX = clientX - this.offsetX;
@@ -417,7 +423,7 @@ class ChatBot {
     newY = Math.max(0, Math.min(newY, vpHeight - winHeight));
     this.chatbotWindow.style.left = `${newX}px`;
     this.chatbotWindow.style.top = `${newY}px`;
-    if (e.type === "touchmove") e.preventDefault();
+    // if (e.type === "touchmove") e.preventDefault();
   }
 
   _stopDrag() {
@@ -1100,10 +1106,16 @@ function addFixedGearIcon() {
     gearDragOffsetX = clientX - gearIcon.offsetLeft;
     gearDragOffsetY = clientY - gearIcon.offsetTop;
     gearIcon.style.cursor = "grabbing";
-    if (e.type === "touchstart") e.preventDefault();
+    // if (e.type === "touchstart") e.preventDefault();
   };
   const onGearDrag = (e) => {
     if (!isDraggingGear) return;
+
+    // TAMBAHKAN ini: Panggil preventDefault HANYA saat touchmove
+    if (e.type === "touchmove") {
+      e.preventDefault();
+    }
+
     const clientX = e.clientX || (e.touches && e.touches[0].clientX);
     const clientY = e.clientY || (e.touches && e.touches[0].clientY);
     let newX = clientX - gearDragOffsetX;
@@ -1116,7 +1128,7 @@ function addFixedGearIcon() {
     newY = Math.max(0, Math.min(newY, vpHeight - iconHeight));
     gearIcon.style.left = `${newX}px`;
     gearIcon.style.top = `${newY}px`;
-    if (e.type === "touchmove") e.preventDefault();
+    // if (e.type === "touchmove") e.preventDefault();
   };
   const stopGearDrag = () => {
     if (!isDraggingGear) return;
