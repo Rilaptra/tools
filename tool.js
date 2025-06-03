@@ -72,24 +72,6 @@ class ChatBot {
 
     this._setInitialPosition();
     this._attachEventListeners();
-    this._initializeDarkMode();
-  }
-
-  _initializeDarkMode() {
-    const htmlElement = document.documentElement;
-    // Cek juga class 'dark' di body jika tools.js di-inject ke halaman yang sudah punya dark mode sendiri
-    if (
-      localStorage.getItem("erzyDarkMode") === "true" ||
-      (!("erzyDarkMode" in localStorage) &&
-        window.matchMedia("(prefers-color-scheme: dark)").matches) ||
-      document.body.classList.contains("dark")
-    ) {
-      htmlElement.classList.add("dark");
-      this.chatbotWindow.classList.add("dark"); // Pastikan window chatbot juga ikut dark mode
-    } else {
-      htmlElement.classList.remove("dark");
-      this.chatbotWindow.classList.remove("dark");
-    }
   }
 
   _renderMessage(messageText, isUser, timestamp) {
@@ -1164,7 +1146,7 @@ function initializeErzyPageMenu() {
 
   window.erzyPageMenuInitialized = true;
   console.log("Erzy Tools: Page Menu initialized.");
-  return { menuElement, gearIconElement, toolsContainer };
+  return { menuElement, gearIconElement };
 }
 
 function initialize() {
