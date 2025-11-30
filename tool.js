@@ -1,10 +1,14 @@
+/**
+ * ERZY TOOLS - MOBILE FIXED VERSION
+ * Fix: Touch vs Drag conflict resolved
+ */
+
 // --- Global Constants ---
 const CHAT_HISTORY_KEY = "erzyChatHistory";
 const GEMINI_API_KEY_STORAGE_KEY = "geminiApiKey";
 const GEMINI_MODEL_STORAGE_KEY = "modelSelect";
 const DEFAULT_GEMINI_MODEL = "gemini-2.0-flash";
 const PROVIDED_API_KEY = ""; 
-const PAGE_MENU_GEAR_ICON_POSITION_KEY = "erzyPageMenuGearIconPosition";
 
 // --- Shadow DOM Setup ---
 let shadowRoot = null;
@@ -13,77 +17,47 @@ let shadowHost = null;
 function initShadowDOM() {
   if (document.getElementById("erzy-tools-host")) return;
 
-  // 1. Buat Host Element
+  // 1. Host Element (Fullscreen, Click-through)
   shadowHost = document.createElement("div");
   shadowHost.id = "erzy-tools-host";
-  
-  // PERUBAHAN PENTING:
-  // Kita buat host memenuhi layar, tapi pointer-events: none (klik tembus ke bawah)
-  // Agar elemen tools di dalamnya bisa diklik, kita set pointer-events: auto pada CSS elemennya.
-  shadowHost.style.position = "fixed";
-  shadowHost.style.top = "0";
-  shadowHost.style.left = "0";
-  shadowHost.style.width = "100vw";
-  shadowHost.style.height = "100vh";
-  shadowHost.style.zIndex = "2147483647"; // Max Z-Index
-  shadowHost.style.pointerEvents = "none"; // PENTING: Biar situs asli bisa diklik
-  shadowHost.style.overflow = "hidden"; // Mencegah scrollbar ganda
-  
+  shadowHost.style.cssText = "position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 2147483647; pointer-events: none; overflow: hidden;";
   document.body.appendChild(shadowHost);
 
-  // 2. Attach Shadow DOM
+  // 2. Attach Shadow
   shadowRoot = shadowHost.attachShadow({ mode: "open" });
 
-  // 3. Inject CSS
-  // Tailwind
+  // 3. Inject Tailwind
   const tailwindLink = document.createElement("link");
   tailwindLink.rel = "stylesheet";
   tailwindLink.href = "https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css";
   shadowRoot.appendChild(tailwindLink);
-
-  // FontAwesome (Opsional, kita pakai emoji sebagai backup)
-  const faLink = document.createElement("link");
-  faLink.rel = "stylesheet";
-  faLink.href = "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css";
-  shadowRoot.appendChild(faLink);
 
   // 4. Custom Styles
   const customStyle = document.createElement("style");
   customStyle.textContent = `
     :host { all: initial; font-family: sans-serif; }
     
-    /* PENTING: Semua elemen interaktif tools harus pointer-events: auto */
-    #erzyPageMenuGearIcon, 
-    #erzyPageMenu, 
-    #erzyChatbotWindow,
-    .erzy-interactive {
-        pointer-events: auto !important; 
+    /* Interactive Elements must capture pointer events */
+    .erzy-interactive { pointer-events: auto !important; }
+    
+    /* Menu Animation */
+    #erzyPageMenu { 
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
+        transform: translateY(100%); 
+        bottom: 0;
+    }
+    #erzyPageMenu.erzy-menu-open { 
+        transform: translateY(0); 
     }
 
     /* Scrollbar */
-    .erzy-chatbot-messages::-webkit-scrollbar { width: 8px; }
-    .erzy-chatbot-messages::-webkit-scrollbar-track { background: #f1f1f1; }
-    .erzy-chatbot-messages::-webkit-scrollbar-thumb { background: #888; border-radius: 4px; }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #f1f1f1; }
+    ::-webkit-scrollbar-thumb { background: #888; border-radius: 3px; }
     
-    .dark .erzy-chatbot-messages::-webkit-scrollbar-track { background: #4b5563; }
-    .dark .erzy-chatbot-messages::-webkit-scrollbar-thumb { background: #6b7280; }
-
-    /* Dragging */
-    .erzy-dragging, .erzy-dragging * { user-select: none !important; cursor: grabbing !important; }
-
-    /* Dark Mode Overrides */
-    .dark #erzyChatbotWindow { background-color: #1f2937; border-color: #374151; }
-    .dark #erzyChatbotHeader { background-color: #374151; border-color: #4b5563; }
-    .dark #erzyChatbotHeader h2, .dark #erzyChatbotHeader button { color: #f3f4f6; }
-    .dark #erzyChatbotMessages { background-color: #1f2937; }
-    .dark #erzyChatbotInputArea { background-color: #374151; border-color: #4b5563; }
-    .dark #erzyChatbotInput { background-color: #1f2937; border-color: #4b5563; color: #f9fafb; }
-    
-    /* Page Menu Animation */
-    #erzyPageMenu { transition: bottom 0.3s ease-out, transform 0.3s ease-out; bottom: -100%; transform: translateY(100%); }
-    #erzyPageMenu.erzy-menu-visible { bottom: 0; transform: translateY(0); }
-    .dark #erzyPageMenu { background-color: rgba(31, 41, 55, 0.95); border-color: #4b5563; }
-    .dark #erzyPageMenu h1 { color: #f3f4f6; }
+    /* Dark Mode Support inside Shadow DOM */
+    .dark-mode .bg-custom { background-color: #1f2937; color: white; }
+    .dark-mode .border-custom { border-color: #374151; }
   `;
   shadowRoot.appendChild(customStyle);
 }
@@ -93,280 +67,292 @@ function getEl(selector) {
   return shadowRoot.querySelector(selector);
 }
 
-// --- Logic Classes (ChatBot & Tools) ---
-// (Bagian ini sama seperti sebelumnya, dipadatkan)
+// --- ChatBot Logic ---
 class ChatBot {
-  constructor(model, apiKey, domElements) {
-    this.domElements = domElements;
-    this.chatbotWindow = domElements.chatbotWindow;
-    this.messagesContainer = domElements.messagesContainer;
-    this.chatInput = domElements.chatInput;
-    this.apiKey = apiKey || localStorage.getItem(GEMINI_API_KEY_STORAGE_KEY) || PROVIDED_API_KEY;
-    this.model = model || localStorage.getItem(GEMINI_MODEL_STORAGE_KEY) || DEFAULT_GEMINI_MODEL;
-    if (!localStorage.getItem(GEMINI_API_KEY_STORAGE_KEY) && this.apiKey === PROVIDED_API_KEY) localStorage.setItem(GEMINI_API_KEY_STORAGE_KEY, this.apiKey);
-    if (!localStorage.getItem(GEMINI_MODEL_STORAGE_KEY)) localStorage.setItem(GEMINI_MODEL_STORAGE_KEY, this.model);
-    this.chatHistory = [];
-    this.isDragging = false;
-    this._loadChatHistory();
-    this._setInitialPosition();
-    this._attachEventListeners();
+  constructor(dom) {
+    this.dom = dom;
+    this.apiKey = localStorage.getItem(GEMINI_API_KEY_STORAGE_KEY) || PROVIDED_API_KEY;
+    this.model = localStorage.getItem(GEMINI_MODEL_STORAGE_KEY) || DEFAULT_GEMINI_MODEL;
+    this.history = [];
+    this.init();
   }
-  _renderMessage(text, isUser, timestamp) {
-    const div = document.createElement("div");
-    div.className = `flex ${isUser ? "justify-end" : "justify-start"} group mb-4`;
-    let processed = text.replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>").replace(/`(.*?)`/g, '<code class="bg-gray-200 px-1 rounded font-mono">$1</code>').replace(/\n/g, "<br>");
-    div.innerHTML = `<div class="${isUser ? "bg-blue-500 text-white" : "bg-gray-200 text-gray-800"} p-3 rounded-lg max-w-[90%] shadow text-sm">${processed}</div>`;
-    this.messagesContainer.appendChild(div);
-    this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
-  }
-  _addMessageToHistoryAndRender(text, isUser) {
-      if (!text.startsWith("Error:") && !text.startsWith("Info:")) {
-          this.chatHistory.push({ text, isUser, timestamp: new Date().toLocaleTimeString() });
-          localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(this.chatHistory));
-      }
-      this._renderMessage(text, isUser, new Date().toLocaleTimeString());
-  }
-  _loadChatHistory() {
-      const h = localStorage.getItem(CHAT_HISTORY_KEY);
-      this.messagesContainer.innerHTML = "";
-      if(h) { this.chatHistory = JSON.parse(h); this.chatHistory.forEach(m => this._renderMessage(m.text, m.isUser, m.timestamp)); }
-      else { this._addMessageToHistoryAndRender("Halo! Saya Gemini AI ✨.", false); }
-  }
-  async sendRequest(msg) {
-      if(!msg.trim()) return;
-      this._addMessageToHistoryAndRender(msg, true);
-      this.chatInput.value = "";
-      // Dummy response logic for UI test if no API key
-      if(!this.apiKey) { setTimeout(()=>this._addMessageToHistoryAndRender("Info: API Key belum diatur.", false), 500); return; }
+  
+  init() {
+      this.loadHistory();
+      this.dom.form.addEventListener("submit", (e) => { e.preventDefault(); this.send(this.dom.input.value); });
+      this.dom.closeBtn.addEventListener("click", () => this.dom.window.classList.add("hidden"));
       
-      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent?key=${this.apiKey}`;
-      const historyCtx = this.chatHistory.slice(0, -1).filter(m => !m.text.startsWith("Error") && !m.text.startsWith("Info")).map(m => ({ role: m.isUser?"user":"model", parts:[{text:m.text}] }));
-      // Context page
-      let context = "";
-      try { context = document.body.innerText.substring(0,5000); } catch(e){}
-      historyCtx.push({ role: "user", parts: [{ text: `Context:\n${context}\n\nUser Question:\n${msg}` }] });
-
-      try {
-          const res = await fetch(apiUrl, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({contents:historyCtx}) });
-          const data = await res.json();
-          if(data.candidates) this._addMessageToHistoryAndRender(data.candidates[0].content.parts[0].text, false);
-          else throw new Error("No response");
-      } catch(e) { this._addMessageToHistoryAndRender("Error: " + e.message, false); }
-  }
-  _setInitialPosition() {
-      const saved = localStorage.getItem("erzyChatbotWindowPosition");
-      if(saved) { const p = JSON.parse(saved); this.chatbotWindow.style.left = p.x+"px"; this.chatbotWindow.style.top = p.y+"px"; }
-      else { this.chatbotWindow.style.left = "20px"; this.chatbotWindow.style.top = "20px"; }
-  }
-  _attachEventListeners() {
-      this.domElements.chatForm.addEventListener("submit", (e)=>{e.preventDefault(); this.sendRequest(this.chatInput.value);});
-      this.domElements.closeButton.addEventListener("click", ()=>this.chatbotWindow.classList.add("hidden"));
-      
-      // Drag Logic
-      let isDrag=false, offX, offY;
-      const start = (e) => { isDrag=true; const c=e.touches?e.touches[0]:e; const r=this.chatbotWindow.getBoundingClientRect(); offX=c.clientX-r.left; offY=c.clientY-r.top; };
-      const move = (e) => { if(!isDrag)return; if(e.type==="touchmove")e.preventDefault(); const c=e.touches?e.touches[0]:e; this.chatbotWindow.style.left=(c.clientX-offX)+"px"; this.chatbotWindow.style.top=(c.clientY-offY)+"px"; };
-      const end = () => { if(isDrag) { isDrag=false; localStorage.setItem("erzyChatbotWindowPosition", JSON.stringify({x:this.chatbotWindow.offsetLeft, y:this.chatbotWindow.offsetTop})); } };
-      
-      this.domElements.chatbotHeader.addEventListener("mousedown", start);
-      this.domElements.chatbotHeader.addEventListener("touchstart", start, {passive:false});
-      document.addEventListener("mousemove", move);
-      document.addEventListener("touchmove", move, {passive:false});
-      document.addEventListener("mouseup", end);
-      document.addEventListener("touchend", end);
-      
-      this.domElements.settingsButton.addEventListener("click", ()=> {
-          const m = getEl("#erzyGeminiSettingsModal"); if(m) m.classList.toggle("hidden");
+      // Settings Logic
+      this.dom.settingsBtn.addEventListener("click", () => {
+          const m = getEl("#erzySettingsModal");
+          if(m) m.classList.remove("hidden");
       });
   }
-  updateCredentials(k, m) { this.apiKey=k; this.model=m; localStorage.setItem(GEMINI_API_KEY_STORAGE_KEY, k); localStorage.setItem(GEMINI_MODEL_STORAGE_KEY, m); }
+
+  appendMsg(text, isUser) {
+      const div = document.createElement("div");
+      div.className = `flex ${isUser ? "justify-end" : "justify-start"} mb-2`;
+      div.innerHTML = `<div class="${isUser ? "bg-blue-600 text-white" : "bg-gray-200 text-gray-800"} p-2 rounded-lg max-w-[85%] text-sm break-words">${text}</div>`;
+      this.dom.msgs.appendChild(div);
+      this.dom.msgs.scrollTop = this.dom.msgs.scrollHeight;
+      
+      if(!text.startsWith("Error:") && !text.startsWith("Info:")) {
+          this.history.push({ role: isUser ? "user" : "model", parts: [{ text }] });
+          localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(this.history));
+      }
+  }
+
+  loadHistory() {
+      const saved = localStorage.getItem(CHAT_HISTORY_KEY);
+      if(saved) {
+          this.history = JSON.parse(saved);
+          this.history.forEach(h => this.appendMsg(h.parts[0].text, h.role === "user"));
+      } else {
+          this.appendMsg("Halo! Saya Gemini AI.", false);
+      }
+  }
+
+  async send(msg) {
+      if(!msg.trim()) return;
+      this.appendMsg(msg, true);
+      this.dom.input.value = "";
+      
+      if(!this.apiKey) { this.appendMsg("Info: Set API Key di menu Gear.", false); return; }
+      
+      const ctx = document.body.innerText.substring(0, 5000); // Context page
+      const payload = { 
+          contents: [
+              ...this.history.filter(h => h.role), // Previous history
+              { role: "user", parts: [{ text: `Context:\n${ctx}\n\nQuestion: ${msg}` }] }
+          ] 
+      };
+
+      try {
+          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent?key=${this.apiKey}`, {
+              method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload)
+          });
+          const data = await res.json();
+          if(data.candidates) this.appendMsg(data.candidates[0].content.parts[0].text, false);
+          else throw new Error("No response or Blocked");
+      } catch(e) { this.appendMsg("Error: " + e.message, false); }
+  }
 }
 
 // --- UI Creation ---
-function createChatbotUI() {
-    const div = document.createElement("div");
-    div.id = "erzyChatbotWindow";
-    // Added 'erzy-interactive' class
-    div.className = "erzy-interactive fixed w-80 h-96 bg-white rounded-lg shadow-2xl flex flex-col border border-gray-400 hidden";
-    div.style.zIndex = "1000"; // Internal z-index
-    div.innerHTML = `
-        <div id="erzyChatbotHeader" class="bg-gray-200 p-2 flex justify-between items-center cursor-move select-none border-b border-gray-300">
-            <span class="font-bold">🤖 Gemini</span>
+
+function createUI() {
+    // 1. CHAT WINDOW
+    const chatWin = document.createElement("div");
+    chatWin.className = "erzy-interactive fixed w-80 h-96 bg-white dark:bg-gray-800 rounded-lg shadow-2xl flex flex-col border border-gray-300 hidden";
+    // Center it initially
+    chatWin.style.cssText = "left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 1000;"; 
+    chatWin.innerHTML = `
+        <div id="erzyHeader" class="bg-gray-100 p-2 flex justify-between items-center cursor-move border-b select-none">
+            <span class="font-bold text-gray-700">🤖 Gemini AI</span>
             <div>
-                <button id="erzyChatbotSettingsButton" class="px-1">⚙️</button>
-                <button id="erzyChatbotCloseButton" class="px-1">❌</button>
+                <button id="erzySetBtn" class="mr-2">⚙️</button>
+                <button id="erzyCloseBtn" class="text-red-500">✕</button>
             </div>
         </div>
-        <div id="erzyChatbotMessages" class="flex-grow p-2 overflow-y-auto bg-gray-50"></div>
-        <div id="erzyChatbotInputArea" class="p-2 border-t">
-            <form id="erzyChatbotForm" class="flex gap-1">
-                <input id="erzyChatbotInput" class="flex-grow border rounded px-1" placeholder="Tanya..." autocomplete="off">
-                <button id="erzyChatbotSendButton" class="bg-blue-500 text-white px-2 rounded">➤</button>
-            </form>
-        </div>
+        <div id="erzyMsgs" class="flex-grow p-2 overflow-y-auto"></div>
+        <form id="erzyForm" class="p-2 border-t flex gap-1">
+            <input id="erzyInput" class="flex-grow border rounded px-2 py-1 text-sm" placeholder="Ketik pesan..." autocomplete="off">
+            <button class="bg-blue-500 text-white px-3 rounded">➤</button>
+        </form>
     `;
-    shadowRoot.appendChild(div);
-    return {
-        chatbotWindow: div,
-        chatbotHeader: div.querySelector("#erzyChatbotHeader"),
-        messagesContainer: div.querySelector("#erzyChatbotMessages"),
-        chatForm: div.querySelector("#erzyChatbotForm"),
-        chatInput: div.querySelector("#erzyChatbotInput"),
-        settingsButton: div.querySelector("#erzyChatbotSettingsButton"),
-        closeButton: div.querySelector("#erzyChatbotCloseButton")
-    };
-}
+    shadowRoot.appendChild(chatWin);
 
-function createPageMenu() {
-    if (getEl("#erzyPageMenu")) return;
-
-    // 1. MENU PANEL
+    // 2. MENU PANEL (SLIDING UP)
     const menu = document.createElement("div");
     menu.id = "erzyPageMenu";
-    menu.className = "erzy-interactive fixed left-0 right-0 h-48 bg-gray-800 text-white z-[99998] p-4 rounded-t-xl border-t-2 border-blue-500 shadow-2xl";
-    menu.style.bottom = "-100%"; // Hidden logic
-    menu.innerHTML = `<h3 class="text-center font-mono border-b border-gray-600 pb-2 mb-2">🛠️ Erzy Tools</h3><div id="erzyToolsContainer" class="flex flex-wrap justify-center gap-2"></div>`;
+    menu.className = "erzy-interactive fixed left-0 right-0 h-auto min-h-[150px] bg-gray-900 text-white z-[99998] p-4 rounded-t-2xl border-t-2 border-blue-500 shadow-[0_-10px_40px_rgba(0,0,0,0.5)]";
+    menu.innerHTML = `
+        <div class="flex justify-between items-center mb-4 border-b border-gray-700 pb-2">
+            <h3 class="font-mono font-bold text-lg">🛠️ Erzy Tools</h3>
+            <button id="erzyCloseMenu" class="text-gray-400 hover:text-white px-2">▼</button>
+        </div>
+        <div id="erzyTools" class="flex flex-wrap justify-center gap-3"></div>
+    `;
     shadowRoot.appendChild(menu);
 
-    // 2. GEAR ICON (TOMBOL UTAMA)
+    // 3. GEAR ICON (FLOATING BUTTON)
     const gear = document.createElement("div");
-    gear.id = "erzyPageMenuGearIcon";
-    gear.className = "erzy-interactive fixed w-14 h-14 bg-blue-600 rounded-full shadow-lg flex items-center justify-center cursor-pointer text-white text-2xl z-[99999] hover:bg-blue-500 active:scale-90 transition-transform";
-    // Set posisi awal via JS style langsung agar tidak 0
-    gear.style.bottom = "20px";
-    gear.style.right = "20px";
-    // Gunakan EMOJI agar tidak tergantung FontAwesome
-    gear.innerHTML = "⚙️"; 
-    
-    // Logic Toggle Menu
-    gear.addEventListener("click", (e) => {
-        // Stop propagation agar tidak dianggap drag
-        e.stopPropagation();
-        menu.classList.toggle("erzy-menu-visible");
-        console.log("Gear Clicked, Menu Toggled");
-    });
-
-    // Logic Drag Gear
-    let isDrag = false, startX, startY, initialLeft, initialTop;
-    const dragStart = (e) => {
-        const touch = e.touches ? e.touches[0] : e;
-        isDrag = true;
-        startX = touch.clientX;
-        startY = touch.clientY;
-        const rect = gear.getBoundingClientRect();
-        initialLeft = rect.left;
-        initialTop = rect.top;
-        // Reset bottom/right to allow left/top positioning
-        gear.style.bottom = "auto";
-        gear.style.right = "auto";
-        gear.style.left = initialLeft + "px";
-        gear.style.top = initialTop + "px";
-    };
-
-    const dragMove = (e) => {
-        if (!isDrag) return;
-        if (e.type === "touchmove") e.preventDefault();
-        const touch = e.touches ? e.touches[0] : e;
-        const dx = touch.clientX - startX;
-        const dy = touch.clientY - startY;
-        gear.style.left = (initialLeft + dx) + "px";
-        gear.style.top = (initialTop + dy) + "px";
-    };
-
-    const dragEnd = (e) => {
-        if(!isDrag) return;
-        isDrag = false;
-        // Simple click detection vs drag
-        const touch = e.changedTouches ? e.changedTouches[0] : e;
-        if (Math.abs(touch.clientX - startX) < 5 && Math.abs(touch.clientY - startY) < 5) {
-            // It was a click, let the click handler handle it (or call it here)
-        }
-    };
-
-    gear.addEventListener("mousedown", dragStart);
-    gear.addEventListener("touchstart", dragStart, { passive: false });
-    document.addEventListener("mousemove", dragMove);
-    document.addEventListener("touchmove", dragMove, { passive: false });
-    document.addEventListener("mouseup", dragEnd);
-    document.addEventListener("touchend", dragEnd);
-
+    gear.className = "erzy-interactive fixed w-14 h-14 bg-blue-600 rounded-full shadow-lg flex items-center justify-center cursor-pointer text-white text-2xl z-[99999] transition-transform active:scale-90";
+    gear.style.cssText = "bottom: 20px; right: 20px; touch-action: none;"; // touch-action none important for drag
+    gear.innerHTML = "⚙️";
     shadowRoot.appendChild(gear);
-}
 
-function createSettingsModal() {
-    if (getEl("#erzyGeminiSettingsModal")) return;
+    // 4. SETTINGS MODAL
     const modal = document.createElement("div");
-    modal.id = "erzyGeminiSettingsModal";
-    modal.className = "erzy-interactive fixed inset-0 bg-black bg-opacity-80 flex hidden justify-center items-center z-[100000]";
+    modal.id = "erzySettingsModal";
+    modal.className = "erzy-interactive fixed inset-0 bg-black bg-opacity-80 flex hidden justify-center items-center z-[100001]";
     modal.innerHTML = `
-        <div class="bg-gray-800 p-5 rounded max-w-sm w-full text-white">
-            <h3 class="text-xl mb-3">Settings</h3>
-            <label class="block text-sm">API Key:</label>
-            <input id="erzyModalApiKey" type="password" class="w-full p-2 rounded bg-gray-700 mb-3 border border-gray-600">
-            <label class="block text-sm">Model:</label>
-            <select id="erzyModalModelSelect" class="w-full p-2 rounded bg-gray-700 mb-4 border border-gray-600">
+        <div class="bg-white p-5 rounded-lg w-80 shadow-lg">
+            <h3 class="font-bold mb-3">Settings</h3>
+            <input id="apiKeyInput" placeholder="Paste Gemini API Key" class="w-full border p-2 mb-2 rounded text-sm">
+            <select id="modelSelect" class="w-full border p-2 mb-4 rounded text-sm">
                 <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+                <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
             </select>
             <div class="flex justify-end gap-2">
-                <button id="erzyCloseSettings" class="bg-gray-600 px-3 py-1 rounded">Close</button>
-                <button id="erzySaveSettings" class="bg-blue-600 px-3 py-1 rounded">Save</button>
+                <button id="cancelSet" class="bg-gray-300 px-3 py-1 rounded">Cancel</button>
+                <button id="saveSet" class="bg-blue-600 text-white px-3 py-1 rounded">Save</button>
             </div>
         </div>
     `;
     shadowRoot.appendChild(modal);
-    
-    // Logic
-    const close = modal.querySelector("#erzyCloseSettings");
-    const save = modal.querySelector("#erzySaveSettings");
-    const keyIn = modal.querySelector("#erzyModalApiKey");
-    const modIn = modal.querySelector("#erzyModalModelSelect");
-    
-    // Load
-    keyIn.value = localStorage.getItem(GEMINI_API_KEY_STORAGE_KEY) || "";
-    
-    close.onclick = () => modal.classList.add("hidden");
-    save.onclick = () => {
-        if(window.erzyChatbotInstance) window.erzyChatbotInstance.updateCredentials(keyIn.value, modIn.value);
-        modal.classList.add("hidden");
-    };
+
+    return { chatWin, menu, gear, modal };
 }
 
-// --- Init ---
-function initialize() {
-    console.log("Initializing Erzy Tools...");
-    initShadowDOM();
-    
-    // Apply dark mode if needed to host
-    if(window.matchMedia("(prefers-color-scheme: dark)").matches) shadowHost.classList.add("dark");
+// --- Event Handlers (THE FIX IS HERE) ---
 
-    createPageMenu();
-    const dom = createChatbotUI();
-    createSettingsModal();
+function attachEvents(ui) {
+    // --- GEAR LOGIC (MOBILE FRIENDLY) ---
+    let isDragging = false;
+    let startX, startY, initialLeft, initialTop;
+    let hasMoved = false;
+
+    const toggleMenu = () => {
+        ui.menu.classList.toggle("erzy-menu-open");
+    };
+
+    ui.gear.addEventListener("touchstart", (e) => {
+        isDragging = true;
+        hasMoved = false;
+        const touch = e.touches[0];
+        startX = touch.clientX;
+        startY = touch.clientY;
+        const rect = ui.gear.getBoundingClientRect();
+        initialLeft = rect.left;
+        initialTop = rect.top;
+        
+        // Convert bottom/right to left/top for dragging
+        ui.gear.style.bottom = "auto";
+        ui.gear.style.right = "auto";
+        ui.gear.style.left = initialLeft + "px";
+        ui.gear.style.top = initialTop + "px";
+    }, { passive: false });
+
+    document.addEventListener("touchmove", (e) => {
+        if (!isDragging) return;
+        const touch = e.touches[0];
+        const dx = touch.clientX - startX;
+        const dy = touch.clientY - startY;
+        
+        // Detect movement threshold (5px)
+        if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+            hasMoved = true;
+            e.preventDefault(); // Prevent scrolling only if we are dragging the gear
+        }
+
+        ui.gear.style.left = (initialLeft + dx) + "px";
+        ui.gear.style.top = (initialTop + dy) + "px";
+    }, { passive: false });
+
+    ui.gear.addEventListener("touchend", (e) => {
+        isDragging = false;
+        if (!hasMoved) {
+            // MOVEMENT WAS < 5px, SO IT IS A TAP!
+            toggleMenu();
+        }
+    });
     
-    window.erzyChatbotInstance = new ChatBot(null, null, dom);
+    // Mouse fallback for PC testing
+    ui.gear.addEventListener("mousedown", (e) => {
+        isDragging = true; hasMoved = false;
+        startX = e.clientX; startY = e.clientY;
+        const rect = ui.gear.getBoundingClientRect();
+        initialLeft = rect.left; initialTop = rect.top;
+        ui.gear.style.bottom = "auto"; ui.gear.style.right = "auto";
+        ui.gear.style.left = initialLeft + "px"; ui.gear.style.top = initialTop + "px";
+    });
+    document.addEventListener("mousemove", (e) => {
+        if(!isDragging) return;
+        const dx = e.clientX - startX; const dy = e.clientY - startY;
+        if(Math.abs(dx)>5 || Math.abs(dy)>5) hasMoved = true;
+        ui.gear.style.left = (initialLeft + dx) + "px";
+        ui.gear.style.top = (initialTop + dy) + "px";
+    });
+    ui.gear.addEventListener("mouseup", () => {
+        isDragging = false;
+        if(!hasMoved) toggleMenu();
+    });
+
+    // --- OTHER UI EVENTS ---
+    const closeMenuBtn = ui.menu.querySelector("#erzyCloseMenu");
+    closeMenuBtn.addEventListener("click", () => ui.menu.classList.remove("erzy-menu-open"));
+    
+    // Settings Modal
+    const saveSet = ui.modal.querySelector("#saveSet");
+    const cancelSet = ui.modal.querySelector("#cancelSet");
+    const apiIn = ui.modal.querySelector("#apiKeyInput");
+    const modelIn = ui.modal.querySelector("#modelSelect");
+
+    apiIn.value = localStorage.getItem(GEMINI_API_KEY_STORAGE_KEY) || "";
+    
+    saveSet.addEventListener("click", () => {
+        localStorage.setItem(GEMINI_API_KEY_STORAGE_KEY, apiIn.value);
+        localStorage.setItem(GEMINI_MODEL_STORAGE_KEY, modelIn.value);
+        if(window.erzyBot) { window.erzyBot.apiKey = apiIn.value; window.erzyBot.model = modelIn.value; }
+        ui.modal.classList.add("hidden");
+        alert("Settings Saved!");
+    });
+    cancelSet.addEventListener("click", () => ui.modal.classList.add("hidden"));
+}
+
+// --- INITIALIZE ---
+function init() {
+    console.log("Erzy Tools Loading...");
+    initShadowDOM();
+    const ui = createUI();
+    attachEvents(ui);
+    
+    // Create ChatBot Instance
+    window.erzyBot = new ChatBot({
+        window: ui.chatWin,
+        msgs: ui.chatWin.querySelector("#erzyMsgs"),
+        form: ui.chatWin.querySelector("#erzyForm"),
+        input: ui.chatWin.querySelector("#erzyInput"),
+        settingsBtn: ui.chatWin.querySelector("#erzySetBtn"),
+        closeBtn: ui.chatWin.querySelector("#erzyCloseBtn"),
+    });
 
     // Add Tool Buttons
-    const container = getEl("#erzyToolsContainer");
+    const toolsContainer = ui.menu.querySelector("#erzyTools");
     
-    const btn1 = document.createElement("button");
-    btn1.textContent = "💬 Toggle Chat";
-    btn1.className = "erzy-interactive bg-blue-600 text-white px-3 py-2 rounded shadow hover:bg-blue-500";
-    btn1.onclick = () => dom.chatbotWindow.classList.toggle("hidden");
-    container.appendChild(btn1);
+    const addButton = (text, icon, action) => {
+        const btn = document.createElement("button");
+        btn.className = "flex flex-col items-center justify-center w-20 h-20 bg-gray-800 hover:bg-gray-700 rounded-xl border border-gray-600 transition-all active:scale-95";
+        btn.innerHTML = `<span class="text-2xl mb-1">${icon}</span><span class="text-xs text-center">${text}</span>`;
+        btn.onclick = action;
+        toolsContainer.appendChild(btn);
+    };
 
-    const btn2 = document.createElement("button");
-    btn2.textContent = "💻 Eval JS";
-    btn2.className = "erzy-interactive bg-gray-600 text-white px-3 py-2 rounded shadow hover:bg-gray-500";
-    btn2.onclick = () => { const c = prompt("Code:"); if(c) try { alert(eval(c)); } catch(e){ alert(e); } };
-    container.appendChild(btn2);
+    addButton("Chat AI", "💬", () => {
+        ui.chatWin.classList.remove("hidden");
+        ui.menu.classList.remove("erzy-menu-open");
+    });
+
+    addButton("Eval JS", "💻", () => {
+        const code = prompt("Masukkan kode JavaScript:");
+        if(code) {
+            try { alert("Result: " + eval(code)); } catch(e) { alert("Error: " + e); }
+        }
+    });
+    
+    addButton("Select All", "📝", () => {
+         const s = document.createElement("style");
+         s.innerHTML = "* { user-select: text !important; -webkit-user-select: text !important; }";
+         document.head.appendChild(s);
+         alert("Sekarang semua teks bisa dicopy!");
+    });
 
     console.log("Erzy Tools Ready!");
-    // Uncomment baris di bawah ini jika ingin ada notifikasi popup saat script berhasil dimuat
-    // alert("Erzy Tools Loaded Successfully!");
 }
 
 if (document.readyState === "complete" || document.readyState === "interactive") {
-    initialize();
+    init();
 } else {
-    document.addEventListener("DOMContentLoaded", initialize);
+    document.addEventListener("DOMContentLoaded", init);
 }
