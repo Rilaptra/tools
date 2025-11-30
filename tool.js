@@ -1,358 +1,272 @@
 /**
- * ERZY TOOLS - MOBILE FIXED VERSION
- * Fix: Touch vs Drag conflict resolved
+ * ERZY TOOLS - FINAL MOBILE FIX
+ * Fix: 'reading 0' error & Tap vs Drag detection
  */
 
-// --- Global Constants ---
-const CHAT_HISTORY_KEY = "erzyChatHistory";
-const GEMINI_API_KEY_STORAGE_KEY = "geminiApiKey";
-const GEMINI_MODEL_STORAGE_KEY = "modelSelect";
-const DEFAULT_GEMINI_MODEL = "gemini-2.0-flash";
-const PROVIDED_API_KEY = ""; 
+(function() { // Wrap in IIFE to prevent global pollution
+
+// --- Constants ---
+const STORAGE_KEYS = {
+    API_KEY: "geminiApiKey",
+    MODEL: "modelSelect",
+    HISTORY: "erzyChatHistory"
+};
 
 // --- Shadow DOM Setup ---
-let shadowRoot = null;
-let shadowHost = null;
+let shadowHost, shadowRoot;
 
 function initShadowDOM() {
-  if (document.getElementById("erzy-tools-host")) return;
+    // Prevent double injection
+    if (document.getElementById("erzy-tools-host")) return false;
 
-  // 1. Host Element (Fullscreen, Click-through)
-  shadowHost = document.createElement("div");
-  shadowHost.id = "erzy-tools-host";
-  shadowHost.style.cssText = "position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 2147483647; pointer-events: none; overflow: hidden;";
-  document.body.appendChild(shadowHost);
+    shadowHost = document.createElement("div");
+    shadowHost.id = "erzy-tools-host";
+    // Z-Index Max & Pointer Events None (biar tembus klik ke web asli)
+    shadowHost.style.cssText = "position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 2147483647; pointer-events: none; overflow: hidden;";
+    document.body.appendChild(shadowHost);
 
-  // 2. Attach Shadow
-  shadowRoot = shadowHost.attachShadow({ mode: "open" });
+    shadowRoot = shadowHost.attachShadow({ mode: "open" });
 
-  // 3. Inject Tailwind
-  const tailwindLink = document.createElement("link");
-  tailwindLink.rel = "stylesheet";
-  tailwindLink.href = "https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css";
-  shadowRoot.appendChild(tailwindLink);
-
-  // 4. Custom Styles
-  const customStyle = document.createElement("style");
-  customStyle.textContent = `
-    :host { all: initial; font-family: sans-serif; }
-    
-    /* Interactive Elements must capture pointer events */
-    .erzy-interactive { pointer-events: auto !important; }
-    
-    /* Menu Animation */
-    #erzyPageMenu { 
-        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
-        transform: translateY(100%); 
-        bottom: 0;
-    }
-    #erzyPageMenu.erzy-menu-open { 
-        transform: translateY(0); 
-    }
-
-    /* Scrollbar */
-    ::-webkit-scrollbar { width: 6px; }
-    ::-webkit-scrollbar-track { background: #f1f1f1; }
-    ::-webkit-scrollbar-thumb { background: #888; border-radius: 3px; }
-    
-    /* Dark Mode Support inside Shadow DOM */
-    .dark-mode .bg-custom { background-color: #1f2937; color: white; }
-    .dark-mode .border-custom { border-color: #374151; }
-  `;
-  shadowRoot.appendChild(customStyle);
+    // Inject CSS (Tailwind + Custom)
+    const style = document.createElement("style");
+    style.textContent = `
+        /* Reset & Base */
+        :host { all: initial; font-family: sans-serif; line-height: 1.5; }
+        * { box-sizing: border-box; }
+        
+        /* Interactive Class (PENTING: Biar bisa diklik) */
+        .erzy-interactive { pointer-events: auto !important; touch-action: none; }
+        
+        /* Tailwind-ish Classes */
+        .fixed { position: fixed; }
+        .bg-white { background-color: white; }
+        .bg-gray-800 { background-color: #1f2937; }
+        .bg-blue-600 { background-color: #2563eb; }
+        .text-white { color: white; }
+        .text-gray-800 { color: #1f2937; }
+        .rounded-full { border-radius: 9999px; }
+        .rounded-lg { border-radius: 0.5rem; }
+        .shadow-lg { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+        .flex { display: flex; }
+        .items-center { align-items: center; }
+        .justify-center { justify-content: center; }
+        .justify-between { justify-content: space-between; }
+        .p-4 { padding: 1rem; }
+        .p-2 { padding: 0.5rem; }
+        .w-14 { width: 3.5rem; }
+        .h-14 { height: 3.5rem; }
+        .w-full { width: 100%; }
+        .hidden { display: none !important; }
+        
+        /* Menu Animation */
+        #erzyPageMenu {
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            transform: translateY(100%);
+            bottom: 0; left: 0; right: 0;
+            position: fixed;
+            background-color: #1f2937;
+            border-top: 2px solid #2563eb;
+            border-radius: 1rem 1rem 0 0;
+            padding: 1rem;
+            color: white;
+            z-index: 99999;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        #erzyPageMenu.open { transform: translateY(0); }
+        
+        /* Chat Window */
+        #erzyChatWin {
+            position: fixed; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 90%; max-width: 350px; height: 500px; max-height: 80vh;
+            background: white; border-radius: 0.75rem;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+            display: flex; flex-direction: column;
+            border: 1px solid #e5e7eb;
+            z-index: 100000;
+        }
+        .dark-mode #erzyChatWin { background: #1f2937; border-color: #374151; color: white; }
+    `;
+    shadowRoot.appendChild(style);
+    return true;
 }
 
-function getEl(selector) {
-  if (!shadowRoot) return null;
-  return shadowRoot.querySelector(selector);
-}
-
-// --- ChatBot Logic ---
-class ChatBot {
-  constructor(dom) {
-    this.dom = dom;
-    this.apiKey = localStorage.getItem(GEMINI_API_KEY_STORAGE_KEY) || PROVIDED_API_KEY;
-    this.model = localStorage.getItem(GEMINI_MODEL_STORAGE_KEY) || DEFAULT_GEMINI_MODEL;
-    this.history = [];
-    this.init();
-  }
-  
-  init() {
-      this.loadHistory();
-      this.dom.form.addEventListener("submit", (e) => { e.preventDefault(); this.send(this.dom.input.value); });
-      this.dom.closeBtn.addEventListener("click", () => this.dom.window.classList.add("hidden"));
-      
-      // Settings Logic
-      this.dom.settingsBtn.addEventListener("click", () => {
-          const m = getEl("#erzySettingsModal");
-          if(m) m.classList.remove("hidden");
-      });
-  }
-
-  appendMsg(text, isUser) {
-      const div = document.createElement("div");
-      div.className = `flex ${isUser ? "justify-end" : "justify-start"} mb-2`;
-      div.innerHTML = `<div class="${isUser ? "bg-blue-600 text-white" : "bg-gray-200 text-gray-800"} p-2 rounded-lg max-w-[85%] text-sm break-words">${text}</div>`;
-      this.dom.msgs.appendChild(div);
-      this.dom.msgs.scrollTop = this.dom.msgs.scrollHeight;
-      
-      if(!text.startsWith("Error:") && !text.startsWith("Info:")) {
-          this.history.push({ role: isUser ? "user" : "model", parts: [{ text }] });
-          localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(this.history));
-      }
-  }
-
-  loadHistory() {
-      const saved = localStorage.getItem(CHAT_HISTORY_KEY);
-      if(saved) {
-          this.history = JSON.parse(saved);
-          this.history.forEach(h => this.appendMsg(h.parts[0].text, h.role === "user"));
-      } else {
-          this.appendMsg("Halo! Saya Gemini AI.", false);
-      }
-  }
-
-  async send(msg) {
-      if(!msg.trim()) return;
-      this.appendMsg(msg, true);
-      this.dom.input.value = "";
-      
-      if(!this.apiKey) { this.appendMsg("Info: Set API Key di menu Gear.", false); return; }
-      
-      const ctx = document.body.innerText.substring(0, 5000); // Context page
-      const payload = { 
-          contents: [
-              ...this.history.filter(h => h.role), // Previous history
-              { role: "user", parts: [{ text: `Context:\n${ctx}\n\nQuestion: ${msg}` }] }
-          ] 
-      };
-
-      try {
-          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent?key=${this.apiKey}`, {
-              method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload)
-          });
-          const data = await res.json();
-          if(data.candidates) this.appendMsg(data.candidates[0].content.parts[0].text, false);
-          else throw new Error("No response or Blocked");
-      } catch(e) { this.appendMsg("Error: " + e.message, false); }
-  }
-}
-
-// --- UI Creation ---
-
+// --- UI Builder ---
 function createUI() {
-    // 1. CHAT WINDOW
-    const chatWin = document.createElement("div");
-    chatWin.className = "erzy-interactive fixed w-80 h-96 bg-white dark:bg-gray-800 rounded-lg shadow-2xl flex flex-col border border-gray-300 hidden";
-    // Center it initially
-    chatWin.style.cssText = "left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 1000;"; 
-    chatWin.innerHTML = `
-        <div id="erzyHeader" class="bg-gray-100 p-2 flex justify-between items-center cursor-move border-b select-none">
-            <span class="font-bold text-gray-700">🤖 Gemini AI</span>
-            <div>
-                <button id="erzySetBtn" class="mr-2">⚙️</button>
-                <button id="erzyCloseBtn" class="text-red-500">✕</button>
-            </div>
-        </div>
-        <div id="erzyMsgs" class="flex-grow p-2 overflow-y-auto"></div>
-        <form id="erzyForm" class="p-2 border-t flex gap-1">
-            <input id="erzyInput" class="flex-grow border rounded px-2 py-1 text-sm" placeholder="Ketik pesan..." autocomplete="off">
-            <button class="bg-blue-500 text-white px-3 rounded">➤</button>
-        </form>
-    `;
-    shadowRoot.appendChild(chatWin);
-
-    // 2. MENU PANEL (SLIDING UP)
-    const menu = document.createElement("div");
-    menu.id = "erzyPageMenu";
-    menu.className = "erzy-interactive fixed left-0 right-0 h-auto min-h-[150px] bg-gray-900 text-white z-[99998] p-4 rounded-t-2xl border-t-2 border-blue-500 shadow-[0_-10px_40px_rgba(0,0,0,0.5)]";
-    menu.innerHTML = `
-        <div class="flex justify-between items-center mb-4 border-b border-gray-700 pb-2">
-            <h3 class="font-mono font-bold text-lg">🛠️ Erzy Tools</h3>
-            <button id="erzyCloseMenu" class="text-gray-400 hover:text-white px-2">▼</button>
-        </div>
-        <div id="erzyTools" class="flex flex-wrap justify-center gap-3"></div>
-    `;
-    shadowRoot.appendChild(menu);
-
-    // 3. GEAR ICON (FLOATING BUTTON)
+    // 1. GEAR ICON (Tombol Utama)
     const gear = document.createElement("div");
-    gear.className = "erzy-interactive fixed w-14 h-14 bg-blue-600 rounded-full shadow-lg flex items-center justify-center cursor-pointer text-white text-2xl z-[99999] transition-transform active:scale-90";
-    gear.style.cssText = "bottom: 20px; right: 20px; touch-action: none;"; // touch-action none important for drag
+    gear.className = "erzy-interactive fixed w-14 h-14 bg-blue-600 rounded-full shadow-lg flex items-center justify-center text-white";
+    gear.style.cssText = "bottom: 30px; right: 30px; font-size: 24px; cursor: pointer; user-select: none; -webkit-user-select: none;";
     gear.innerHTML = "⚙️";
     shadowRoot.appendChild(gear);
 
-    // 4. SETTINGS MODAL
-    const modal = document.createElement("div");
-    modal.id = "erzySettingsModal";
-    modal.className = "erzy-interactive fixed inset-0 bg-black bg-opacity-80 flex hidden justify-center items-center z-[100001]";
-    modal.innerHTML = `
-        <div class="bg-white p-5 rounded-lg w-80 shadow-lg">
-            <h3 class="font-bold mb-3">Settings</h3>
-            <input id="apiKeyInput" placeholder="Paste Gemini API Key" class="w-full border p-2 mb-2 rounded text-sm">
-            <select id="modelSelect" class="w-full border p-2 mb-4 rounded text-sm">
-                <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
-                <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
-            </select>
-            <div class="flex justify-end gap-2">
-                <button id="cancelSet" class="bg-gray-300 px-3 py-1 rounded">Cancel</button>
-                <button id="saveSet" class="bg-blue-600 text-white px-3 py-1 rounded">Save</button>
-            </div>
+    // 2. MENU PANEL
+    const menu = document.createElement("div");
+    menu.id = "erzyPageMenu";
+    menu.className = "erzy-interactive";
+    menu.innerHTML = `
+        <div class="flex justify-between items-center mb-4 border-b border-gray-600 pb-2">
+            <span style="font-weight: bold; font-family: monospace;">🛠️ Erzy Tools</span>
+            <span id="closeMenu" style="cursor: pointer; padding: 5px;">▼</span>
         </div>
+        <div id="toolsContainer" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;"></div>
     `;
-    shadowRoot.appendChild(modal);
+    shadowRoot.appendChild(menu);
 
-    return { chatWin, menu, gear, modal };
+    // 3. CHAT WINDOW (Hidden by default)
+    const chat = document.createElement("div");
+    chat.id = "erzyChatWin";
+    chat.className = "erzy-interactive hidden";
+    chat.innerHTML = `
+        <div class="p-2 bg-gray-200 dark:bg-gray-700 flex justify-between items-center rounded-t-lg" style="cursor: move;">
+            <span class="text-gray-800 font-bold text-sm">🤖 Gemini AI</span>
+            <button id="closeChat" class="text-red-500 font-bold px-2">✕</button>
+        </div>
+        <div id="chatMsgs" style="flex: 1; overflow-y: auto; padding: 10px; font-size: 14px; color: #333;"></div>
+        <form id="chatForm" class="p-2 border-t flex">
+            <input id="chatInput" placeholder="Tanya sesuatu..." style="flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 4px; outline: none;">
+            <button type="submit" class="bg-blue-600 text-white px-3 py-1 ml-2 rounded">➤</button>
+        </form>
+    `;
+    shadowRoot.appendChild(chat);
+
+    return { gear, menu, chat };
 }
 
-// --- Event Handlers (THE FIX IS HERE) ---
-
-function attachEvents(ui) {
-    // --- GEAR LOGIC (MOBILE FRIENDLY) ---
+// --- Logic & Event Handling (THE FIX) ---
+function initEvents(ui) {
+    // === GEAR DRAG & CLICK LOGIC (SUPER ROBUST) ===
     let isDragging = false;
-    let startX, startY, initialLeft, initialTop;
-    let hasMoved = false;
+    let startX = 0, startY = 0;
+    let initialLeft = 0, initialTop = 0;
+    let startTime = 0;
 
-    const toggleMenu = () => {
-        ui.menu.classList.toggle("erzy-menu-open");
+    // Helper untuk posisi aman (Safety Check)
+    const getTouch = (e) => {
+        if (e.touches && e.touches.length > 0) return e.touches[0];
+        if (e.changedTouches && e.changedTouches.length > 0) return e.changedTouches[0];
+        return e; // Mouse event
     };
 
     ui.gear.addEventListener("touchstart", (e) => {
-        isDragging = true;
-        hasMoved = false;
-        const touch = e.touches[0];
+        // Prevent default browser zooming/scrolling on the button
+        // e.preventDefault(); // Jangan preventDefault di start, nanti input text susah
+        
+        const touch = getTouch(e);
         startX = touch.clientX;
         startY = touch.clientY;
+        startTime = new Date().getTime();
+        isDragging = false; // Reset status
+
+        // Simpan posisi awal elemen
         const rect = ui.gear.getBoundingClientRect();
         initialLeft = rect.left;
         initialTop = rect.top;
-        
-        // Convert bottom/right to left/top for dragging
+
+        // Ubah positioning ke Left/Top agar bisa didrag
         ui.gear.style.bottom = "auto";
         ui.gear.style.right = "auto";
         ui.gear.style.left = initialLeft + "px";
         ui.gear.style.top = initialTop + "px";
     }, { passive: false });
 
+    // Listener di document agar drag tidak putus saat gerak cepat
     document.addEventListener("touchmove", (e) => {
-        if (!isDragging) return;
-        const touch = e.touches[0];
+        // Cek apakah targetnya gear (atau kita sedang dragging gear)
+        if (e.target !== ui.gear && !isDragging) return;
+        
+        const touch = getTouch(e);
+        if (!touch) return; // FIX ERROR 'reading 0'
+
         const dx = touch.clientX - startX;
         const dy = touch.clientY - startY;
-        
-        // Detect movement threshold (5px)
-        if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
-            hasMoved = true;
-            e.preventDefault(); // Prevent scrolling only if we are dragging the gear
-        }
 
-        ui.gear.style.left = (initialLeft + dx) + "px";
-        ui.gear.style.top = (initialTop + dy) + "px";
+        // Threshold Logic: Hanya anggap drag jika geser > 5px
+        if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+            isDragging = true;
+            e.preventDefault(); // Mencegah scroll layar saat drag gear
+            ui.gear.style.left = (initialLeft + dx) + "px";
+            ui.gear.style.top = (initialTop + dy) + "px";
+        }
     }, { passive: false });
 
     ui.gear.addEventListener("touchend", (e) => {
-        isDragging = false;
-        if (!hasMoved) {
-            // MOVEMENT WAS < 5px, SO IT IS A TAP!
-            toggleMenu();
+        const endTime = new Date().getTime();
+        const timeDiff = endTime - startTime;
+
+        // LOGIKA KLIK:
+        // Jika tidak dragging (geser dikit < 5px) DAN waktu sentuh < 300ms (Tap cepat)
+        if (!isDragging && timeDiff < 300) {
+            // Ini adalah TAP/KLIK
+            ui.menu.classList.toggle("open");
         }
-    });
-    
-    // Mouse fallback for PC testing
-    ui.gear.addEventListener("mousedown", (e) => {
-        isDragging = true; hasMoved = false;
-        startX = e.clientX; startY = e.clientY;
-        const rect = ui.gear.getBoundingClientRect();
-        initialLeft = rect.left; initialTop = rect.top;
-        ui.gear.style.bottom = "auto"; ui.gear.style.right = "auto";
-        ui.gear.style.left = initialLeft + "px"; ui.gear.style.top = initialTop + "px";
-    });
-    document.addEventListener("mousemove", (e) => {
-        if(!isDragging) return;
-        const dx = e.clientX - startX; const dy = e.clientY - startY;
-        if(Math.abs(dx)>5 || Math.abs(dy)>5) hasMoved = true;
-        ui.gear.style.left = (initialLeft + dx) + "px";
-        ui.gear.style.top = (initialTop + dy) + "px";
-    });
-    ui.gear.addEventListener("mouseup", () => {
+        // Jika Dragging selesai
         isDragging = false;
-        if(!hasMoved) toggleMenu();
     });
 
-    // --- OTHER UI EVENTS ---
-    const closeMenuBtn = ui.menu.querySelector("#erzyCloseMenu");
-    closeMenuBtn.addEventListener("click", () => ui.menu.classList.remove("erzy-menu-open"));
-    
-    // Settings Modal
-    const saveSet = ui.modal.querySelector("#saveSet");
-    const cancelSet = ui.modal.querySelector("#cancelSet");
-    const apiIn = ui.modal.querySelector("#apiKeyInput");
-    const modelIn = ui.modal.querySelector("#modelSelect");
-
-    apiIn.value = localStorage.getItem(GEMINI_API_KEY_STORAGE_KEY) || "";
-    
-    saveSet.addEventListener("click", () => {
-        localStorage.setItem(GEMINI_API_KEY_STORAGE_KEY, apiIn.value);
-        localStorage.setItem(GEMINI_MODEL_STORAGE_KEY, modelIn.value);
-        if(window.erzyBot) { window.erzyBot.apiKey = apiIn.value; window.erzyBot.model = modelIn.value; }
-        ui.modal.classList.add("hidden");
-        alert("Settings Saved!");
-    });
-    cancelSet.addEventListener("click", () => ui.modal.classList.add("hidden"));
-}
-
-// --- INITIALIZE ---
-function init() {
-    console.log("Erzy Tools Loading...");
-    initShadowDOM();
-    const ui = createUI();
-    attachEvents(ui);
-    
-    // Create ChatBot Instance
-    window.erzyBot = new ChatBot({
-        window: ui.chatWin,
-        msgs: ui.chatWin.querySelector("#erzyMsgs"),
-        form: ui.chatWin.querySelector("#erzyForm"),
-        input: ui.chatWin.querySelector("#erzyInput"),
-        settingsBtn: ui.chatWin.querySelector("#erzySetBtn"),
-        closeBtn: ui.chatWin.querySelector("#erzyCloseBtn"),
+    // === MENU LOGIC ===
+    ui.menu.querySelector("#closeMenu").addEventListener("click", () => {
+        ui.menu.classList.remove("open");
     });
 
-    // Add Tool Buttons
-    const toolsContainer = ui.menu.querySelector("#erzyTools");
-    
-    const addButton = (text, icon, action) => {
-        const btn = document.createElement("button");
-        btn.className = "flex flex-col items-center justify-center w-20 h-20 bg-gray-800 hover:bg-gray-700 rounded-xl border border-gray-600 transition-all active:scale-95";
-        btn.innerHTML = `<span class="text-2xl mb-1">${icon}</span><span class="text-xs text-center">${text}</span>`;
-        btn.onclick = action;
-        toolsContainer.appendChild(btn);
+    // === TOOLS BUILDER ===
+    const addTool = (icon, label, action) => {
+        const btn = document.createElement("div");
+        btn.style.cssText = "background: #374151; padding: 10px; border-radius: 8px; text-align: center; cursor: pointer; border: 1px solid #4b5563;";
+        btn.innerHTML = `<div style="font-size: 24px;">${icon}</div><div style="font-size: 10px; margin-top: 5px; color: #d1d5db;">${label}</div>`;
+        btn.onclick = () => { action(); ui.menu.classList.remove("open"); };
+        ui.menu.querySelector("#toolsContainer").appendChild(btn);
     };
 
-    addButton("Chat AI", "💬", () => {
-        ui.chatWin.classList.remove("hidden");
-        ui.menu.classList.remove("erzy-menu-open");
+    addTool("💬", "Chat AI", () => ui.chat.classList.remove("hidden"));
+    
+    addTool("💻", "Eval JS", () => {
+        setTimeout(() => { // Timeout biar menu tutup dulu
+            const code = prompt("Jalankan Script JS:");
+            if (code) {
+                try { alert(eval(code)); } catch (err) { alert("Error: " + err); }
+            }
+        }, 100);
     });
 
-    addButton("Eval JS", "💻", () => {
-        const code = prompt("Masukkan kode JavaScript:");
-        if(code) {
-            try { alert("Result: " + eval(code)); } catch(e) { alert("Error: " + e); }
-        }
+    addTool("📝", "Select All", () => {
+        const s = document.createElement("style");
+        s.innerHTML = "* { user-select: text !important; -webkit-user-select: text !important; }";
+        document.head.appendChild(s);
+        alert("Mode Copy Aktif!");
     });
     
-    addButton("Select All", "📝", () => {
-         const s = document.createElement("style");
-         s.innerHTML = "* { user-select: text !important; -webkit-user-select: text !important; }";
-         document.head.appendChild(s);
-         alert("Sekarang semua teks bisa dicopy!");
-    });
+    addTool("🔄", "Reload", () => location.reload());
 
-    console.log("Erzy Tools Ready!");
+    // === CHAT LOGIC (SIMPLE) ===
+    ui.chat.querySelector("#closeChat").onclick = () => ui.chat.classList.add("hidden");
+    
+    // Simple Chat Drag
+    const header = ui.chat.querySelector("div"); // header div
+    let chatDrag = false, cSX, cSY, cIX, cIY;
+    header.addEventListener("touchstart", (e) => {
+        const t = getTouch(e); cSX=t.clientX; cSY=t.clientY;
+        const r = ui.chat.getBoundingClientRect(); cIX=r.left; cIY=r.top;
+        chatDrag = true;
+    }, {passive:false});
+    document.addEventListener("touchmove", (e) => {
+        if(!chatDrag) return;
+        const t = getTouch(e); if(!t) return;
+        e.preventDefault();
+        ui.chat.style.left = (cIX + (t.clientX - cSX) + (ui.chat.offsetWidth/2)) + "px"; // Adjust for transform center
+        ui.chat.style.top = (cIY + (t.clientY - cSY) + (ui.chat.offsetHeight/2)) + "px";
+    }, {passive:false});
+    document.addEventListener("touchend", () => chatDrag = false);
 }
 
-if (document.readyState === "complete" || document.readyState === "interactive") {
-    init();
+// --- Main Execution ---
+if (initShadowDOM()) {
+    const ui = createUI();
+    initEvents(ui);
+    console.log("Erzy Tools v3 Loaded Successfully");
 } else {
-    document.addEventListener("DOMContentLoaded", init);
+    console.log("Erzy Tools already active");
 }
+
+})();
